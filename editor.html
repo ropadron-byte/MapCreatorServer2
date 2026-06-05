@@ -1,0 +1,2052 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Editor · Modo Dios</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-deep:      #080b12;
+            --bg-main:      #0d1117;
+            --bg-surface:   #131922;
+            --bg-card:      #181f2e;
+            --bg-darker:    #0a0e17;
+            --border:       #1e2840;
+            --border-lit:   #2a3654;
+            --gold:         #ffd966;
+            --gold-dim:     #c9a93a;
+            --red:          #ff4757;
+            --red-dim:      #8a1f2a;
+            --green:        #2ed573;
+            --green-dim:    #1a6e3a;
+            --purple:       #7c4dff;
+            --purple-dim:   #3d2480;
+            --yellow:       #feca57;
+            --text:         #d8e0f0;
+            --text-muted:   #5a6380;
+            --text-dim:     #8090b0;
+            --cell-size:    32px;
+        }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html, body {
+            height: 100%;
+            background: var(--bg-deep);
+            font-family: 'Rajdhani', sans-serif;
+            color: var(--text);
+            overflow-x: hidden;
+        }
+
+        /* Scanline overlay */
+        body::before {
+            content: '';
+            position: fixed; inset: 0; pointer-events: none; z-index: 1000;
+            background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.04) 2px, rgba(0,0,0,0.04) 4px);
+        }
+
+        /* Grid texture */
+        body::after {
+            content: '';
+            position: fixed; inset: 0; pointer-events: none; z-index: 0;
+            background-image:
+                linear-gradient(rgba(255,217,102,0.015) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,217,102,0.015) 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+
+        .app-wrap {
+            position: relative; z-index: 1;
+            display: flex; flex-direction: column;
+            min-height: 100vh;
+            padding: 16px;
+            gap: 12px;
+        }
+
+        /* ── HEADER ── */
+        .app-header {
+            display: flex; align-items: center; justify-content: space-between;
+            flex-wrap: wrap; gap: 8px;
+        }
+        .header-title {
+            display: flex; align-items: baseline; gap: 10px;
+        }
+        h1 {
+            font-family: 'Orbitron', monospace;
+            font-size: 1.4rem;
+            font-weight: 900;
+            color: var(--red);
+            text-shadow: 0 0 20px rgba(255,71,87,0.4), 0 0 50px rgba(255,71,87,0.15);
+            letter-spacing: 1px;
+        }
+        .header-sub {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            letter-spacing: 1px;
+        }
+
+        /* ── TOOLBAR ── */
+        .toolbar {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 10px 14px;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .tool-group {
+            display: flex; align-items: center; gap: 6px;
+        }
+        .sep {
+            width: 1px; height: 26px;
+            background: var(--border-lit);
+            flex-shrink: 0;
+        }
+
+        /* Buttons base */
+        .btn {
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 700;
+            font-size: 0.82rem;
+            border: 1px solid transparent;
+            padding: 6px 14px;
+            border-radius: 7px;
+            cursor: pointer;
+            transition: all 0.15s;
+            white-space: nowrap;
+            letter-spacing: 0.3px;
+            display: inline-flex; align-items: center; gap: 5px;
+        }
+        .btn:active { transform: scale(0.96); }
+        .btn-default {
+            background: rgba(255,255,255,0.05);
+            color: var(--text-dim);
+            border-color: var(--border-lit);
+        }
+        .btn-default:hover { background: rgba(255,255,255,0.1); color: var(--text); }
+        .btn-gold {
+            background: linear-gradient(135deg, #ffd966, #e8a800);
+            color: #0d1117; border-color: transparent;
+            box-shadow: 0 3px 12px rgba(255,217,102,0.2);
+        }
+        .btn-gold:hover { box-shadow: 0 3px 20px rgba(255,217,102,0.4); filter: brightness(1.08); }
+        .btn-blue {
+            background: rgba(58,134,255,0.15);
+            color: #7baeff;
+            border-color: rgba(58,134,255,0.25);
+        }
+        .btn-blue:hover { background: rgba(58,134,255,0.3); }
+        .btn-teal {
+            background: rgba(46,213,115,0.12);
+            color: #2ed573;
+            border-color: rgba(46,213,115,0.25);
+        }
+        .btn-teal:hover { background: rgba(46,213,115,0.25); }
+        .btn-danger {
+            background: rgba(255,71,87,0.12);
+            color: var(--red);
+            border-color: rgba(255,71,87,0.25);
+        }
+        .btn-danger:hover { background: rgba(255,71,87,0.28); }
+        .btn-small {
+            padding: 4px 10px;
+            font-size: 0.78rem;
+        }
+
+        /* ── TOOL RADIOS ── */
+        .tool-radio { display: none; }
+
+        /* Destroy */
+        #toolDestroy + label {
+            background: rgba(255,71,87,0.1);
+            color: #ff8fa0;
+            border: 1px solid rgba(255,71,87,0.25);
+        }
+        #toolDestroy + label:hover { background: rgba(255,71,87,0.22); }
+        #toolDestroy:checked + label {
+            background: rgba(255,71,87,0.25);
+            color: #ff4757;
+            border-color: #ff4757;
+            box-shadow: 0 0 12px rgba(255,71,87,0.5), inset 0 0 8px rgba(255,71,87,0.1);
+        }
+
+        /* Repair */
+        #toolRepair + label {
+            background: rgba(46,213,115,0.1);
+            color: #7dffb3;
+            border: 1px solid rgba(46,213,115,0.25);
+        }
+        #toolRepair + label:hover { background: rgba(46,213,115,0.22); }
+        #toolRepair:checked + label {
+            background: rgba(46,213,115,0.25);
+            color: #2ed573;
+            border-color: #2ed573;
+            box-shadow: 0 0 12px rgba(46,213,115,0.5), inset 0 0 8px rgba(46,213,115,0.1);
+        }
+
+        /* Crop */
+        #toolCrop + label {
+            background: rgba(254,202,87,0.1);
+            color: #ffe08a;
+            border: 1px solid rgba(254,202,87,0.25);
+        }
+        #toolCrop + label:hover { background: rgba(254,202,87,0.22); }
+        #toolCrop:checked + label {
+            background: rgba(254,202,87,0.25);
+            color: #feca57;
+            border-color: #feca57;
+            box-shadow: 0 0 12px rgba(254,202,87,0.45);
+        }
+
+        /* Characters tool */
+        #toolCharacters + label {
+            background: rgba(124,77,255,0.12);
+            color: #b39dff;
+            border: 1px solid rgba(124,77,255,0.28);
+        }
+        #toolCharacters + label:hover { background: rgba(124,77,255,0.25); }
+        #toolCharacters:checked + label {
+            background: rgba(124,77,255,0.28);
+            color: #7c4dff;
+            border-color: #7c4dff;
+            box-shadow: 0 0 12px rgba(124,77,255,0.55), inset 0 0 8px rgba(124,77,255,0.1);
+        }
+
+        /* ── MODE INDICATOR BAR ── */
+        .mode-bar {
+            display: flex; align-items: center; gap: 10px;
+            padding: 6px 14px;
+            border-radius: 8px;
+            font-family: 'Orbitron', monospace;
+            font-size: 0.65rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            transition: all 0.3s;
+            border: 1px solid;
+        }
+        .mode-bar.mode-destroy {
+            background: rgba(255,71,87,0.12);
+            color: #ff4757;
+            border-color: rgba(255,71,87,0.35);
+            box-shadow: 0 0 10px rgba(255,71,87,0.2);
+        }
+        .mode-bar.mode-repair {
+            background: rgba(46,213,115,0.12);
+            color: #2ed573;
+            border-color: rgba(46,213,115,0.35);
+            box-shadow: 0 0 10px rgba(46,213,115,0.2);
+        }
+        .mode-bar.mode-crop {
+            background: rgba(254,202,87,0.12);
+            color: #feca57;
+            border-color: rgba(254,202,87,0.35);
+            box-shadow: 0 0 10px rgba(254,202,87,0.18);
+        }
+        .mode-bar.mode-characters {
+            background: rgba(124,77,255,0.12);
+            color: #7c4dff;
+            border-color: rgba(124,77,255,0.38);
+            box-shadow: 0 0 10px rgba(124,77,255,0.25);
+        }
+        .mode-dot {
+            width: 6px; height: 6px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: modePulse 1.4s ease-in-out infinite;
+        }
+        @keyframes modePulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(0.7); }
+        }
+
+        /* ── MAIN LAYOUT ── */
+        .main-layout {
+            display: flex;
+            gap: 12px;
+            flex: 1;
+            min-height: 0;
+            flex-wrap: wrap;
+        }
+        .left-panel {
+            flex: 3; min-width: 0;
+            display: flex; flex-direction: column;
+            gap: 10px;
+        }
+        .right-panel {
+            flex: 1.1;
+            min-width: 280px; max-width: 340px;
+            display: flex; flex-direction: column;
+            gap: 10px;
+        }
+
+        /* ── MAP WRAPPER ── */
+        .map-wrapper {
+            background: #050709;
+            padding: 8px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            box-shadow: inset 0 0 30px rgba(0,0,0,0.9);
+            overflow: auto;
+            flex: 1;
+            min-height: 200px;
+            max-height: calc(100vh - 200px);
+            position: relative;
+        }
+        .map-wrapper::-webkit-scrollbar { width: 6px; height: 6px; }
+        .map-wrapper::-webkit-scrollbar-track { background: var(--bg-main); }
+        .map-wrapper::-webkit-scrollbar-thumb { background: var(--border-lit); border-radius: 3px; }
+
+        #placeholder {
+            padding: 60px 30px;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            line-height: 1.8;
+        }
+        #placeholder .big { font-size: 2.5rem; display: block; margin-bottom: 10px; }
+
+        /* ── GRID ── */
+        .grid {
+            --cellSize: 32px;
+            display: grid; gap: 0;
+            user-select: none;
+            position: relative;
+        }
+
+        /* ── CELL ── */
+        .cell {
+            width: var(--cellSize);
+            height: var(--cellSize);
+            position: relative;
+            overflow: hidden;
+            transition: filter 0.08s;
+        }
+        .cell:hover { filter: brightness(1.35); }
+
+        /* Cell layers */
+        .cell-terrain {
+            position: absolute; inset: 0;
+            display: flex; align-items: center; justify-content: center;
+            font-size: calc(var(--cellSize) * 0.55);
+            transition: opacity 0.15s, font-size 0.15s;
+            z-index: 1;
+            pointer-events: none;
+        }
+        .cell.has-character .cell-terrain {
+            opacity: 0.22;
+            font-size: calc(var(--cellSize) * 0.28);
+            align-items: flex-end;
+            justify-content: flex-start;
+            padding: 1px 0 1px 1px;
+        }
+        .cell-char-layer {
+            position: absolute; inset: 0;
+            display: flex; align-items: center; justify-content: center;
+            font-size: calc(var(--cellSize) * 0.65);
+            z-index: 3;
+            pointer-events: none;
+        }
+        .cell-char-layer img {
+            max-width: 88%; max-height: 88%;
+            object-fit: contain;
+            border-radius: 3px;
+            box-shadow: 0 0 0 1.5px var(--gold), 0 2px 8px rgba(0,0,0,0.6);
+        }
+
+        /* PM badge */
+        .movement-badge {
+            position: absolute; bottom: 1px; right: 1px;
+            background: rgba(0,0,0,0.82);
+            color: var(--gold);
+            font-size: 8px;
+            font-family: 'Orbitron', monospace;
+            font-weight: 700;
+            border-radius: 6px;
+            padding: 1px 3px;
+            z-index: 5;
+            pointer-events: none;
+            line-height: 1.2;
+        }
+        /* Stack count badge */
+        .stack-badge {
+            position: absolute; top: 1px; right: 1px;
+            background: rgba(124,77,255,0.85);
+            color: white;
+            font-size: 7px;
+            font-weight: 700;
+            border-radius: 6px;
+            padding: 1px 3px;
+            z-index: 5;
+        }
+
+        /* Selected character cell — pulsing glow */
+        .cell.char-selected-cell {
+            z-index: 2;
+            animation: selectedPulse 1s ease-in-out infinite;
+        }
+        @keyframes selectedPulse {
+            0%, 100% { box-shadow: inset 0 0 0 2px var(--red), 0 0 8px rgba(255,71,87,0.4); }
+            50% { box-shadow: inset 0 0 0 2px #ff8fa0, 0 0 14px rgba(255,71,87,0.6); }
+        }
+
+        /* Tool cursors */
+        .grid.tool-destroy .cell  { cursor: crosshair; }
+        .grid.tool-repair .cell   { cursor: cell; }
+        .grid.tool-crop .cell     { cursor: crosshair; }
+        .grid.tool-characters .cell { cursor: pointer; }
+
+        /* Tool hover rings */
+        .grid.tool-destroy .cell:hover   { box-shadow: inset 0 0 0 2px rgba(255,71,87,0.7); }
+        .grid.tool-repair .cell:hover    { box-shadow: inset 0 0 0 2px rgba(46,213,115,0.7); }
+        .grid.tool-characters .cell:hover { box-shadow: inset 0 0 0 2px rgba(124,77,255,0.7); }
+
+        /* Destroyed cell */
+        .cell.destroyed-cell { filter: saturate(0) brightness(0.5); }
+        .cell.destroyed-cell::after {
+            content: '✕';
+            position: absolute; inset: 0;
+            display: flex; align-items: center; justify-content: center;
+            font-size: calc(var(--cellSize) * 0.5);
+            color: rgba(255,71,87,0.6);
+            z-index: 6;
+            pointer-events: none;
+        }
+
+        /* Crop highlight */
+        .cell.crop-highlight {
+            outline: 2px dashed #feca57;
+            outline-offset: -2px;
+            z-index: 10;
+        }
+
+        /* Move overlays */
+        .move-overlay {
+            position: absolute;
+            background-color: rgba(124,77,255,0.3);
+            border: 1.5px solid #7c4dff;
+            border-radius: 3px;
+            pointer-events: none;
+            z-index: 20;
+            font-weight: 800;
+            font-size: 9px;
+            font-family: 'Orbitron', monospace;
+            display: flex; align-items: center; justify-content: center;
+            color: #c4b0ff;
+            cursor: pointer;
+            pointer-events: all;
+        }
+        .move-overlay:hover {
+            background-color: rgba(124,77,255,0.55);
+        }
+
+        /* ── RIGHT PANEL CARDS ── */
+        .panel-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        .panel-head {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 10px 14px;
+            background: var(--bg-darker);
+            border-bottom: 1px solid var(--border);
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        .panel-title {
+            font-family: 'Orbitron', monospace;
+            font-size: 0.65rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+            color: var(--gold);
+            text-transform: uppercase;
+        }
+        .panel-body { padding: 12px 14px; }
+
+        /* Status pill */
+        .status-pill {
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            background: rgba(58,134,255,0.12);
+            border: 1px solid rgba(58,134,255,0.2);
+            color: #7baeff;
+            transition: color 0.2s, background 0.2s;
+        }
+        .status-pill.error {
+            background: rgba(255,71,87,0.12);
+            border-color: rgba(255,71,87,0.25);
+            color: #ff8fa0;
+        }
+
+        /* ── CHARACTER LIST ── */
+        .char-list {
+            display: flex; flex-direction: column;
+            gap: 6px;
+            max-height: 220px;
+            overflow-y: auto;
+            padding: 0 0 4px;
+        }
+        .char-list::-webkit-scrollbar { width: 4px; }
+        .char-list::-webkit-scrollbar-thumb { background: var(--border-lit); border-radius: 2px; }
+
+        .char-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-lit);
+            border-radius: 10px;
+            padding: 8px 10px;
+            display: flex; align-items: center; gap: 10px;
+            cursor: pointer;
+            transition: all 0.15s;
+            position: relative;
+        }
+        .char-card:hover { border-color: rgba(124,77,255,0.35); background: rgba(124,77,255,0.06); }
+        .char-card.selected {
+            border-color: var(--purple);
+            background: rgba(124,77,255,0.12);
+            box-shadow: 0 0 0 1px rgba(124,77,255,0.4), 0 0 12px rgba(124,77,255,0.2);
+        }
+        .char-avatar {
+            width: 40px; height: 40px; flex-shrink: 0;
+            background: var(--bg-main);
+            border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.6rem;
+            border: 1px solid var(--border-lit);
+            overflow: hidden;
+        }
+        .char-avatar img { max-width: 100%; max-height: 100%; object-fit: contain; }
+        .char-meta { flex: 1; min-width: 0; }
+        .char-name {
+            font-weight: 700; font-size: 0.88rem;
+            color: var(--text);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .char-stats {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+        /* PM bar */
+        .pm-bar-wrap {
+            height: 3px; background: rgba(255,255,255,0.08);
+            border-radius: 2px; margin-top: 4px; overflow: hidden;
+        }
+        .pm-bar {
+            height: 100%; border-radius: 2px;
+            background: linear-gradient(90deg, #7c4dff, #b39dff);
+            transition: width 0.3s;
+        }
+        .char-btns { display: flex; gap: 4px; flex-shrink: 0; }
+
+        /* Selected char label (in panel head) */
+        .selected-char-tag {
+            display: none;
+            align-items: center; gap: 6px;
+            font-size: 0.78rem; font-weight: 600;
+            color: var(--purple);
+            padding: 3px 8px;
+            border: 1px solid rgba(124,77,255,0.3);
+            border-radius: 6px;
+            background: rgba(124,77,255,0.1);
+        }
+        .selected-char-tag.visible { display: flex; }
+
+        /* ── CREATE CHAR FORM ── */
+        .create-form {
+            background: var(--bg-darker);
+            border-radius: 10px;
+            padding: 10px;
+            display: flex; flex-direction: column; gap: 8px;
+            border: 1px solid var(--border);
+            margin-top: 10px;
+        }
+        .form-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+        .form-label {
+            font-size: 0.7rem; font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+        }
+        input[type="text"], input[type="number"], select.form-select {
+            background: var(--bg-main);
+            color: var(--text);
+            border: 1px solid var(--border-lit);
+            border-radius: 7px;
+            padding: 5px 9px;
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 0.85rem;
+            font-weight: 600;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+        input[type="text"]:focus, input[type="number"]:focus, select.form-select:focus {
+            border-color: rgba(124,77,255,0.5);
+        }
+        input[type="range"] {
+            accent-color: var(--gold);
+        }
+        .img-preview {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            padding: 3px 7px;
+            border-radius: 6px;
+            border: 1px dashed var(--border-lit);
+        }
+
+        /* ── MOVEMENT PANEL ── */
+        .move-panel {
+            background: var(--bg-darker);
+            border-radius: 10px;
+            padding: 10px;
+            border: 1px solid var(--border);
+            margin-top: 8px;
+        }
+        .move-title {
+            font-family: 'Orbitron', monospace;
+            font-size: 0.62rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+        .move-char-name {
+            font-size: 0.82rem; font-weight: 600;
+            color: var(--purple);
+            margin-bottom: 8px;
+        }
+        .move-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 4px;
+            max-width: 200px;
+            margin: 0 auto 8px;
+        }
+        .move-btn {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-lit);
+            border-radius: 6px;
+            padding: 5px 3px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: var(--text-dim);
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.1s;
+            line-height: 1.3;
+        }
+        .move-btn:hover { background: rgba(124,77,255,0.25); border-color: var(--purple); color: #c4b0ff; }
+        .move-btn.disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
+        .move-center { grid-column: 2; grid-row: 2; background: none; border: none; pointer-events: none; }
+
+        /* ── LOG PANEL ── */
+        .log-content {
+            height: 160px;
+            overflow-y: auto;
+            font-size: 0.7rem;
+            font-family: 'Orbitron', monospace;
+            background: var(--bg-darker);
+            padding: 8px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+        .log-content::-webkit-scrollbar { width: 6px; height: 6px; }
+        .log-content::-webkit-scrollbar-track { background: var(--bg-main); }
+        .log-content::-webkit-scrollbar-thumb { background: var(--border-lit); border-radius: 2px; }
+        .log-entry {
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            padding: 3px 0;
+            color: var(--text-dim);
+            font-size: 0.65rem;
+            line-height: 1.6;
+        }
+        .log-entry:first-child { color: var(--text); }
+
+        .log-entry.destroy { color: #ff8fa0; }
+        .log-entry.repair  { color: #7dffb3; }
+        .log-entry.move    { color: #b39dff; }
+        .log-entry.system  { color: #7baeff; }
+    </style>
+</head>
+<body>
+<div class="app-wrap">
+
+    <!-- HEADER -->
+    <div class="app-header">
+        <div class="header-title">
+            <h1>💥 MODO DIOS</h1>
+            <span class="header-sub">Editor de Ciudad · Control Total</span>
+        </div>
+        <div id="modeBar" class="mode-bar mode-destroy">
+            <span class="mode-dot"></span>
+            <span id="modeLabel">💥 DESTRUIR</span>
+        </div>
+    </div>
+
+    <!-- TOOLBAR -->
+    <div class="toolbar">
+        <!-- Navigation -->
+        <div class="tool-group">
+            <button onclick="window.location.href='index.html'" class="btn btn-gold">🏙️ Generador</button>
+        </div>
+        <div class="sep"></div>
+
+        <!-- SISTEMA DE CARPETA -->
+        <div class="tool-group">
+            <button id="selectFolderBtn" class="btn btn-blue">📁 Seleccionar Carpeta</button>
+            <select id="citySelect" style="width:180px;">
+                <option value="">-- Sin carpeta --</option>
+            </select>
+            <button id="loadSelectedBtn" class="btn btn-teal">Cargar</button>
+            <span id="folderStatus" style="font-size:0.7rem; color:var(--text-muted); margin-left:5px;"></span>
+        </div>
+        <div class="sep"></div>
+
+        <!-- File ops -->
+        <div class="tool-group">
+            <label class="btn btn-teal">
+                📂 Importar
+                <input type="file" id="importFile" accept=".json" style="display:none">
+            </label>
+            <button id="exportBtn" class="btn btn-blue">💾 Exportar</button>
+            <button id="saveProjectBtn" class="btn btn-blue">🗂️ Guardar Partida</button>
+            <!-- NUEVO BOTÓN: Tomar Foto -->
+            <button id="screenshotBtn" class="btn btn-blue">📸 Tomar Foto</button>
+        </div>
+        <div class="sep"></div>
+
+        <!-- Tool selection -->
+        <div class="tool-group">
+            <input type="radio" name="tool" id="toolDestroy"    value="destroy"    class="tool-radio" checked>
+            <label for="toolDestroy"    class="btn">💥 Destruir</label>
+
+            <input type="radio" name="tool" id="toolRepair"     value="repair"     class="tool-radio">
+            <label for="toolRepair"     class="btn">🛠️ Reparar</label>
+
+            <input type="radio" name="tool" id="toolCrop"       value="crop"       class="tool-radio">
+            <label for="toolCrop"       class="btn">✂️ Recortar</label>
+
+            <input type="radio" name="tool" id="toolCharacters" value="characters" class="tool-radio">
+            <label for="toolCharacters" class="btn">🧙 Personajes</label>
+
+            <button id="undoBtn" class="btn btn-danger btn-small" title="Deshacer">↩️ Undo</button>
+        </div>
+        <div class="sep"></div>
+
+        <!-- Brush -->
+        <div class="tool-group">
+            <span style="font-size:0.75rem; color:var(--text-muted);">🖌️</span>
+            <input type="range" id="brushSize" min="1" max="10" value="1"
+                   oninput="document.getElementById('brushVal').innerText=this.value"
+                   style="width:70px;">
+            <span id="brushVal" style="font-family:'Orbitron',monospace; font-size:0.7rem; color:var(--gold); min-width:12px;">1</span>
+        </div>
+        <div class="sep"></div>
+
+        <!-- Zoom -->
+        <div class="tool-group">
+            <button id="zoomOutBtn" class="btn btn-default btn-small">−</button>
+            <span style="font-size:0.7rem; color:var(--text-muted); font-family:'Orbitron',monospace; letter-spacing:1px;">ZOOM</span>
+            <button id="zoomInBtn"  class="btn btn-default btn-small">+</button>
+        </div>
+        <div class="sep"></div>
+
+        <!-- Character visibility toggle -->
+        <div class="tool-group">
+            <button id="toggleCharsBtn" class="btn btn-default" title="Alternar visibilidad de personajes en el mapa">🫥 Solo seleccionado</button>
+        </div>
+    </div>
+
+    <!-- MAIN LAYOUT -->
+    <div class="main-layout">
+
+        <!-- LEFT: MAP -->
+        <div class="left-panel">
+            <div class="map-wrapper" id="mapWrapper">
+                <div id="placeholder">
+                    <span class="big">🗺️</span>
+                    Ningún mapa cargado.<br>
+                    Importa un .json desde el Generador o desde una partida guardada.
+                </div>
+                <div class="grid" id="cityGrid" style="display:none;"></div>
+            </div>
+        </div>
+
+        <!-- RIGHT: PANELS -->
+        <div class="right-panel">
+
+            <!-- CHARACTERS PANEL -->
+            <div class="panel-card">
+                <div class="panel-head">
+                    <span class="panel-title">🧙 Personajes</span>
+                    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+                        <span class="status-pill" id="moveStatusMsg">⚡ Listo</span>
+                        <div class="selected-char-tag" id="selectedCharTag">
+                            <span id="selectedCharTagName">—</span>
+                            <button class="btn btn-small btn-default" id="deselectBtn" title="Deseleccionar (ESC)">✕</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="panel-body">
+                    <!-- Char list -->
+                    <div class="char-list" id="charListContainer">
+                        <div style="color:var(--text-muted); font-size:0.82rem; padding:4px;">Sin personajes. Crea uno abajo.</div>
+                    </div>
+
+                    <!-- Create form -->
+                    <div class="create-form">
+                        <div class="form-row">
+                            <span class="form-label">Nombre</span>
+                            <input type="text" id="newCharName" placeholder="Nombre del personaje" style="flex:1; min-width:100px;">
+                        </div>
+                        <div class="form-row">
+                            <span class="form-label">Avatar</span>
+                            <select id="avatarSelect" class="form-select">
+                                <option value="default">🎭 Por defecto</option>
+                                <option value="🧙">🧙 Mago</option>
+                                <option value="⚔️">⚔️ Guerrero</option>
+                                <option value="🏹">🏹 Arquero</option>
+                                <option value="🕵️">🕵️ Pícaro</option>
+                                <option value="🐉">🐉 Dragón</option>
+                                <option value="🧝">🧝 Elfo</option>
+                                <option value="🧟">🧟 Non-muerto</option>
+                                <option value="🧛">🧛 Vampiro</option>
+                            </select>
+                            <label class="btn btn-default btn-small">
+                                📁 Imagen
+                                <input type="file" id="charImageUpload" accept="image/*" style="display:none">
+                            </label>
+                            <span class="img-preview" id="imgPreview">(ninguna)</span>
+                        </div>
+                        <div class="form-row">
+                            <span class="form-label">Movs Máx</span>
+                            <input type="number" id="newCharMove" value="5" min="1" max="99" style="width:55px;" title="Número total de movimientos por turno">
+                            <span class="form-label" style="margin-left:4px;">Rango</span>
+                            <input type="number" id="newCharRange" value="1" min="1" max="30" style="width:50px;" title="Casillas máximas por movimiento individual (diagonal = mismo coste)">
+                        </div>
+                        <div class="form-row">
+                            <button id="createCharBtn" class="btn btn-gold">✨ Crear</button>
+                            <button id="placeCharBtn"  class="btn btn-teal">📍 Colocar</button>
+                            <button id="deleteCharBtn" class="btn btn-danger">🗑️ Eliminar</button>
+                        </div>
+                    </div>
+
+                    <!-- Individual movement -->
+                    <div class="move-panel" id="movePanel">
+                        <div class="move-title">🎮 Movimiento</div>
+                        <div class="move-char-name" id="selectedCharNameMove">Sin selección</div>
+                        <div class="move-grid" id="moveButtonsContainer"></div>
+                        <button id="resetIndividualMoveBtn" class="btn btn-default btn-small" style="width:100%;">♻️ Recuperar PM</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- LOG PANEL -->
+            <div class="panel-card">
+                <div class="panel-head">
+                    <span class="panel-title">📜 Registro de Acciones</span>
+                    <div style="display:flex;gap:5px;">
+                        <button id="saveLogBtn"  class="btn btn-teal btn-small">💾 Guardar Log</button>
+                        <button id="clearLogBtn" class="btn btn-default btn-small">🗑️ Limpiar</button>
+                    </div>
+                </div>
+                <div class="panel-body" style="padding:10px;">
+                    <div class="log-content" id="logContent">
+                        <div class="log-entry system">🗄️ Listo para registrar.</div>
+                    </div>
+                </div>
+            </div>
+
+        </div><!-- /right-panel -->
+    </div><!-- /main-layout -->
+</div><!-- /app-wrap -->
+
+<script>
+// ==========================================
+// DICCIONARIO BASE (SINCRONIZADO CON SCRIPT.JS)
+// ==========================================
+const T = {
+    EMPTY:    { emoji: "⬜", bg: "#c8b89a", name: "Terreno vacío" },
+    AVENUE:   { emoji: "🛣️",  bg: "#e8c84a", name: "Avenida principal" },
+    ROAD:     { emoji: "",     bg: "#7e9ab0", name: "Calle" },
+    ALLEY:    { emoji: "▪️",  bg: "#b8a878", name: "Callejón" },
+    SIDEWALK: { emoji: "🟫",  bg: "#c8a870", name: "Acera" },
+    PLAZA:    { emoji: "⬜",  bg: "#e0d0b0", name: "Plaza pública" },
+    GARDEN:   { emoji: "🌿",  bg: "#7cb518", name: "Jardín interior" },
+    PARK:     { emoji: "🌳",  bg: "#5a9e10", name: "Parque" },
+    FOUNTAIN: { emoji: "💧",  bg: "#6c9ebf", name: "Fuente" },
+    WATER:    { emoji: "🌊",  bg: "#3b82f6", name: "Agua" },
+    DOCK:     { emoji: "⚓",  bg: "#2a6099", name: "Muelle" },
+    FENCE:    { emoji: "🪵",  bg: "#8b5a2b", name: "Valla de madera" }
+};
+
+const BUILDINGS = {
+    casa_min:    { emoji:"🏠", bg:"#8ab85a", name:"Casa modesta" },
+    casa_med:    { emoji:"🏘️", bg:"#7aac48", name:"Casa mediana" },
+    casa_gran:   { emoji:"🏡", bg:"#6a9e38", name:"Casa con jardín" },
+    edificio:    { emoji:"🏢", bg:"#7890c0", name:"Edificio de aptos" },
+    granja:      { emoji:"🚜", bg:"#e6c229", name:"Granja" }, 
+    tienda:      { emoji:"🏪", bg:"#f4a261", name:"Tienda" },
+    tienda_gran: { emoji:"🏬", bg:"#e0922e", name:"Tienda grande" },
+    panaderia:   { emoji:"🥖", bg:"#e8b08a", name:"Panadería" },
+    carniceria:  { emoji:"🍖", bg:"#d09080", name:"Carnicería" },
+    farmacia:    { emoji:"💊", bg:"#b0d8fe", name:"Farmacia" },
+    taberna:     { emoji:"🍺", bg:"#c8a040", name:"Taberna / Posada" },
+    mercado:     { emoji:"🏟️", bg:"#e9b35f", name:"Mercado" },
+    banco:       { emoji:"🏦", bg:"#d9f99d", name:"Banco" },
+    c_comercial: { emoji:"🏬", bg:"#fde68a", name:"Centro comercial" }, 
+    pescaderia:  { emoji:"🐟", bg:"#7ec8e0", name:"Pescadería" },
+    templo:      { emoji:"⛪", bg:"#a7c957", name:"Templo" },
+    ayto:        { emoji:"🏛️", bg:"#cd9771", name:"Ayuntamiento" },
+    escuela:     { emoji:"🏫", bg:"#c7d2fe", name:"Escuela" },
+    hospital:    { emoji:"🏥", bg:"#fecaca", name:"Hospital" },
+    biblioteca:  { emoji:"📖", bg:"#c8a8d8", name:"Biblioteca" },
+    policia:     { emoji:"👮", bg:"#3a6ea5", name:"Comisaría" },
+    herreria:    { emoji:"⚒️", bg:"#bc6c25", name:"Herrería" },
+    almacen:     { emoji:"📦", bg:"#a09090", name:"Almacén" },
+    mina:        { emoji:"⛏️", bg:"#8a6040", name:"Entrada a mina" },
+    construccion:{ emoji:"🚧", bg:"#d97706", name:"En construcción" }
+};
+
+// ============================================================
+// ESTADO GLOBAL
+// ============================================================
+let grid          = null;
+let modeName      = "editado";
+let rows          = 0, cols = 0;
+let isMouseDown   = false;
+let history       = [];
+let currentCellSize = 32;
+
+let characters       = [];
+let selectedCharId   = null;
+let placementMode    = false;
+let cropStart        = null, cropEnd = null;
+
+let showAllChars     = false;  // Toggle: mostrar todos los personajes o solo el seleccionado
+let capturasHandle   = null;   // Subcarpeta para capturas de pantalla
+
+let destructionLog      = [];
+let currentMoveOverlays = [];
+
+// ============================================================
+// UTILIDADES
+// ============================================================
+function addLogEntry(message, type = '') {
+    const time = new Date().toLocaleTimeString('es', { hour12: false });
+    const entry = `[${time}] ${message}`;
+    destructionLog.unshift(entry);
+    if (destructionLog.length > 100) destructionLog.pop();
+
+    const logDiv = document.getElementById("logContent");
+    logDiv.innerHTML = destructionLog.map((e, i) => {
+        let cls = 'log-entry';
+        if (e.includes('Destruc') || e.includes('💥')) cls += ' destroy';
+        else if (e.includes('Reparac') || e.includes('🛠') || e.includes('🔨')) cls += ' repair';
+        else if (e.includes('movió') || e.includes('colocado') || e.includes('teleport')) cls += ' move';
+        else cls += ' system';
+        return `<div class="${cls}">${e}</div>`;
+    }).join('');
+}
+
+function updateStatusMessage(msg, isError = false) {
+    const span = document.getElementById("moveStatusMsg");
+    if (!span) return;
+    span.textContent = msg;
+    span.classList.toggle('error', isError);
+    if (!isError) setTimeout(() => { if (span.textContent === msg) span.classList.remove('error'); }, 2500);
+}
+
+function getCharacterById(id) {
+    return characters.find(ch => ch.id === id) || null;
+}
+
+function getSelectedTool() {
+    const el = document.querySelector('input[name="tool"]:checked');
+    return el ? el.value : 'destroy';
+}
+
+function updateModeBar() {
+    const tool  = getSelectedTool();
+    const bar   = document.getElementById('modeBar');
+    const label = document.getElementById('modeLabel');
+    const configs = {
+        destroy:    { cls: 'mode-destroy',    text: '💥 MODO: DESTRUIR' },
+        repair:     { cls: 'mode-repair',     text: '🛠️ MODO: REPARAR' },
+        crop:       { cls: 'mode-crop',       text: '✂️ MODO: RECORTAR' },
+        characters: { cls: 'mode-characters', text: '🧙 MODO: PERSONAJES' }
+    };
+    const cfg = configs[tool] || configs.destroy;
+    bar.className   = `mode-bar ${cfg.cls}`;
+    label.textContent = cfg.text;
+
+    const g = document.getElementById('cityGrid');
+    if (g) {
+        g.className = `grid tool-${tool}`;
+    }
+}
+
+document.querySelectorAll('input[name="tool"]').forEach(r => r.addEventListener('change', updateModeBar));
+
+// ============================================================
+// FULL RENDER
+// ============================================================
+function fullRender() {
+    renderGrid();
+    renderCharacterList();
+    updateIndividualMovePanel();
+    updateSelectedCharTag();
+    if (selectedCharId) highlightMovableCells();
+    else clearMoveOverlays();
+}
+
+function updateSelectedCharTag() {
+    const tag  = document.getElementById('selectedCharTag');
+    const name = document.getElementById('selectedCharTagName');
+    if (!tag || !name) return;
+    if (selectedCharId) {
+        const ch = getCharacterById(selectedCharId);
+        tag.classList.add('visible');
+        name.textContent = ch ? ch.name : '—';
+    } else {
+        tag.classList.remove('visible');
+    }
+}
+
+document.getElementById('deselectBtn').addEventListener('click', () => {
+    selectedCharId = null;
+    placementMode  = false;
+    fullRender();
+    updateStatusMessage('Deseleccionado');
+    addLogEntry('Personaje deseleccionado');
+});
+
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+        if (placementMode || selectedCharId) {
+            placementMode  = false;
+            selectedCharId = null;
+            fullRender();
+            updateStatusMessage('Deseleccionado (ESC)');
+        }
+    }
+});
+
+// ============================================================
+// SERIALIZACIÓN / GUARDADO
+// ============================================================
+function getFullProjectData() {
+    const serializedGrid = grid.map(row => row.map(cell => {
+        let tKey = Object.entries(T).find(([key, val]) => val.name === cell.type.name)?.[0] || 'EMPTY';
+        let bKey = cell.building ? Object.entries(BUILDINGS).find(([key, val]) => val.name === cell.building.name)?.[0] : null;
+        return {
+            t: tKey,
+            b: bKey,
+            e: cell.isEntrance || false,
+            m: cell.isMainIcon || false,
+            i: cell.info || null,
+            d: cell.destroyed || false,
+            originalName: cell.originalName || cell.type?.name || 'celda'
+        };
+    }));
+    return {
+        version: '3.2',
+        mode: modeName,
+        timestamp: new Date().toISOString(),
+        grid: serializedGrid,
+        characters: characters.map(ch => ({
+            ...ch,
+            // Si la imagen es una referencia a archivo (empieza con "file:"), la guardamos como está.
+            // Si es base64, la convertimos a referencia (se guardará aparte)
+            imgData: ch.imgData && ch.imgData.startsWith('data:') ? null : ch.imgData
+        })),
+        log: destructionLog
+    };
+}
+
+function downloadData(data, filename) {
+    const blob = new Blob([data], { type: 'application/json' });
+    const link = document.createElement('a');
+    link.href   = URL.createObjectURL(blob);
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+}
+
+// ============================================================
+// SISTEMA DE CARPETA LOCAL CON SUBDIRECTORIOS
+// ============================================================
+let currentRootHandle = null;
+let ciudadesHandle = null;
+let logsHandle = null;
+let personajesHandle = null;
+
+async function ensureSubdirectories(root) {
+    try {
+        ciudadesHandle   = await root.getDirectoryHandle("ciudades",  { create: true });
+        logsHandle       = await root.getDirectoryHandle("logs",      { create: true });
+        personajesHandle = await root.getDirectoryHandle("personajes",{ create: true });
+        capturasHandle   = await root.getDirectoryHandle("capturas",  { create: true });
+        return true;
+    } catch (err) {
+        console.error("Error creando subdirectorios:", err);
+        return false;
+    }
+}
+
+async function selectDirectoryEditor() {
+    if (!window.showDirectoryPicker) {
+        alert("Tu navegador no soporta selección de carpetas. Usa los botones tradicionales.");
+        return;
+    }
+    try {
+        const root = await window.showDirectoryPicker();
+        currentRootHandle = root;
+        if (await ensureSubdirectories(root)) {
+            localStorage.setItem("editorRootName", root.name);
+            document.getElementById("folderStatus").innerText = `📁 Carpeta: ${root.name}`;
+            await listCityFilesEditor();
+        } else {
+            alert("No se pudieron crear las subcarpetas necesarias.");
+        }
+    } catch (err) {
+        console.error(err);
+    }
+}
+
+async function listCityFilesEditor() {
+    if (!ciudadesHandle) return;
+    const files = [];
+    for await (const entry of ciudadesHandle.values()) {
+        if (entry.kind === "file" && entry.name.endsWith(".json")) {
+            files.push(entry.name);
+        }
+    }
+    const select = document.getElementById("citySelect");
+    select.innerHTML = '<option value="">-- Selecciona una ciudad --</option>';
+    files.sort().forEach(f => {
+        const opt = document.createElement("option");
+        opt.value = f;
+        opt.textContent = f;
+        select.appendChild(opt);
+    });
+    if (files.length === 0) {
+        select.innerHTML = '<option value="">No hay ciudades guardadas</option>';
+    }
+}
+
+async function saveCityToFolderEditor(cityData, suggestedName) {
+    if (!ciudadesHandle) {
+        downloadData(JSON.stringify(cityData), suggestedName);
+        return;
+    }
+    try {
+        const fileHandle = await ciudadesHandle.getFileHandle(suggestedName, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(JSON.stringify(cityData, null, 2));
+        await writable.close();
+        addLogEntry(`💾 Ciudad guardada en carpeta: ${suggestedName}`);
+        await listCityFilesEditor();
+    } catch (err) {
+        console.error(err);
+        alert("Error al guardar en la carpeta.");
+    }
+}
+
+async function loadCityFromFolderEditor(fileName) {
+    if (!ciudadesHandle) return;
+    try {
+        const fileHandle = await ciudadesHandle.getFileHandle(fileName);
+        const file = await fileHandle.getFile();
+        const text = await file.text();
+        const data = JSON.parse(text);
+        
+        modeName = data.mode || "importado";
+        
+        function getTerrainType(tKey) {
+            if (T[tKey]) return T[tKey];
+            const byName = Object.values(T).find(t => t.name === tKey);
+            return byName || T.EMPTY;
+        }
+        
+        function getBuildingType(bKey) {
+            if (!bKey) return null;
+            if (BUILDINGS[bKey]) return BUILDINGS[bKey];
+            const byName = Object.values(BUILDINGS).find(b => b.name === bKey);
+            return byName || { emoji: "🏚️", bg: "#aaaaaa", name: bKey || "Desconocido" };
+        }
+        
+        grid = data.grid.map(row => row.map(cell => {
+            const cellType = getTerrainType(cell.t);
+            const cellBldg = getBuildingType(cell.b);
+            return {
+                type: cellType,
+                building: cellBldg,
+                isEntrance: cell.e || false,
+                isMainIcon: cell.m || false,
+                info: cell.i || null,
+                destroyed: cell.d || false,
+                originalName: cell.originalName || (cellBldg ? cellBldg.name : cellType.name)
+            };
+        }));
+        
+        rows = grid.length;
+        cols = grid[0]?.length || 0;
+        
+        // Cargar personajes y restaurar imágenes desde archivos si es necesario
+        characters = [];
+        if (data.characters) {
+            for (let ch of data.characters) {
+                let imgData = ch.imgData;
+                // Si la imagen es una referencia a un archivo en la carpeta personajes
+                if (imgData && typeof imgData === "string" && imgData.startsWith("file:")) {
+                    const fileName = imgData.replace("file:", "");
+                    try {
+                        const imgFileHandle = await personajesHandle.getFileHandle(fileName);
+                        const imgFile = await imgFileHandle.getFile();
+                        const reader = new FileReader();
+                        await new Promise((resolve, reject) => {
+                            reader.onload = () => {
+                                ch.imgData = reader.result;
+                                resolve();
+                            };
+                            reader.onerror = reject;
+                            reader.readAsDataURL(imgFile);
+                        });
+                    } catch(e) {
+                        console.warn("No se pudo cargar la imagen:", fileName);
+                        ch.imgData = "🧙";
+                    }
+                }
+                characters.push({
+                    ...ch,
+                    movementLeft: ch.movementLeft !== undefined ? ch.movementLeft : ch.movementMax,
+                    moveRange: ch.moveRange !== undefined ? ch.moveRange : 1
+                });
+            }
+        }
+        
+        if (data.log) destructionLog = data.log;
+        selectedCharId = null;
+        placementMode = false;
+        fullRender();
+        addLogEntry(`📂 Ciudad cargada desde carpeta: ${fileName}`);
+    } catch (err) {
+        console.error(err);
+        alert("Error al cargar la ciudad.");
+    }
+}
+
+// Sobrescribir botones de exportación para usar carpeta
+document.getElementById("exportBtn").addEventListener("click", async () => {
+    if (!grid) return updateStatusMessage("No hay mapa", true);
+    const data = getFullProjectData();
+    const suggestedName = `ciudad_${Date.now()}.json`;
+    await saveCityToFolderEditor(data, suggestedName);
+});
+
+document.getElementById("saveProjectBtn").addEventListener("click", async () => {
+    if (!grid) return updateStatusMessage("No hay mapa", true);
+    const data = getFullProjectData();
+    const ts = new Date().toISOString().slice(0, 19).replace(/:/g, "-");
+    const suggestedName = `partida_${ts}.json`;
+    await saveCityToFolderEditor(data, suggestedName);
+});
+
+// Guardar log en la carpeta logs
+document.getElementById("saveLogBtn").addEventListener("click", async () => {
+    if (!destructionLog.length) return updateStatusMessage("Log vacío", true);
+    const lines = [
+        "=== LOG DE PARTIDA · CIUDAD PROCEDURAL ===",
+        `Fecha: ${new Date().toLocaleString()}`,
+        `Mapa: ${modeName} · ${rows}×${cols}`,
+        `Personajes activos: ${characters.length}`,
+        "=".repeat(44),
+        "",
+        ...destructionLog.slice().reverse()
+    ].join("\n");
+    const blob = new Blob([lines], { type: "text/plain;charset=utf-8" });
+    if (logsHandle) {
+        const fileName = `log_${new Date().toISOString().slice(0, 10)}_${Date.now()}.txt`;
+        try {
+            const fileHandle = await logsHandle.getFileHandle(fileName, { create: true });
+            const writable = await fileHandle.createWritable();
+            await writable.write(blob);
+            await writable.close();
+            addLogEntry(`📋 Log guardado en carpeta: ${fileName}`);
+        } catch(e) {
+            console.error(e);
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = fileName;
+            link.click();
+        }
+    } else {
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = `log_${new Date().toISOString().slice(0, 10)}.txt`;
+        link.click();
+    }
+});
+
+// Conectar eventos de la interfaz de carpeta
+document.getElementById("selectFolderBtn").addEventListener("click", selectDirectoryEditor);
+document.getElementById("loadSelectedBtn").addEventListener("click", () => {
+    const selected = document.getElementById("citySelect").value;
+    if (selected) loadCityFromFolderEditor(selected);
+    else alert("Selecciona una ciudad.");
+});
+
+// Importación tradicional (subir archivo)
+document.getElementById("importFile").addEventListener("change", function (e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function (evt) {
+        try {
+            const data = JSON.parse(evt.target.result);
+            modeName = data.mode || "importado";
+            
+            function getTerrainType(tKey) {
+                if (T[tKey]) return T[tKey];
+                const byName = Object.values(T).find(t => t.name === tKey);
+                return byName || T.EMPTY;
+            }
+            function getBuildingType(bKey) {
+                if (!bKey) return null;
+                if (BUILDINGS[bKey]) return BUILDINGS[bKey];
+                const byName = Object.values(BUILDINGS).find(b => b.name === bKey);
+                return byName || { emoji: "🏚️", bg: "#aaaaaa", name: bKey || "Desconocido" };
+            }
+            
+            grid = data.grid.map(row => row.map(cell => {
+                const cellType = getTerrainType(cell.t);
+                const cellBldg = getBuildingType(cell.b);
+                const displayName = cell.i || (cellBldg ? cellBldg.name : cellType.name);
+                return {
+                    type: cellType, 
+                    building: cellBldg,
+                    isEntrance: cell.e || false, 
+                    isMainIcon: cell.m || false, 
+                    info: cell.i || null,
+                    destroyed: cell.d || false, 
+                    originalName: cell.originalName || displayName
+                };
+            }));
+            
+            rows = grid.length; 
+            cols = grid[0]?.length || 0;
+            characters = (data.characters || []).map(ch => ({
+                ...ch, 
+                movementLeft: ch.movementLeft !== undefined ? ch.movementLeft : ch.movementMax,
+                moveRange: ch.moveRange !== undefined ? ch.moveRange : 1
+            }));
+            if(data.log) destructionLog = data.log;
+            selectedCharId = null; placementMode = false;
+            addLogEntry(`🗺️ Mapa importado con éxito (${rows}x${cols})`);
+            fullRender();
+        } catch (err) { 
+            alert("Archivo inválido o corrupto: " + err.message); 
+            console.error(err); 
+        }
+    };
+    reader.readAsText(file); 
+    e.target.value = '';
+});
+
+// ============================================================
+// ZOOM & CELL SIZE
+// ============================================================
+function updateZoomCSS() {
+    document.getElementById('cityGrid').style.setProperty('--cellSize', currentCellSize + 'px');
+}
+document.getElementById('zoomInBtn').addEventListener('click', () => {
+    currentCellSize = Math.min(80, currentCellSize + 4);
+    updateZoomCSS();
+    if (selectedCharId) highlightMovableCells();
+});
+document.getElementById('zoomOutBtn').addEventListener('click', () => {
+    currentCellSize = Math.max(14, currentCellSize - 4);
+    updateZoomCSS();
+    if (selectedCharId) highlightMovableCells();
+});
+
+// ============================================================
+// PERSONAJES (con guardado de imágenes en carpeta)
+// ============================================================
+let pendingImageData = null;
+
+document.getElementById('charImageUpload').addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+        const img = new Image();
+        img.onload = function() {
+            const canvas = document.createElement('canvas');
+            const maxSize = 64;
+            let w = img.width, h = img.height;
+            if (w > h) { h = h * maxSize / w; w = maxSize; }
+            else       { w = w * maxSize / h; h = maxSize; }
+            canvas.width = w; canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            pendingImageData = canvas.toDataURL('image/png');
+            document.getElementById('imgPreview').textContent = '✅ Lista';
+        };
+        img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+});
+
+document.getElementById('createCharBtn').addEventListener('click', async () => {
+    const name = document.getElementById('newCharName').value.trim();
+    if (!name) return updateStatusMessage('Escribe un nombre', true);
+    let moveVal  = parseInt(document.getElementById('newCharMove').value);
+    if (isNaN(moveVal) || moveVal < 1) moveVal = 5;
+    let rangeVal = parseInt(document.getElementById('newCharRange').value);
+    if (isNaN(rangeVal) || rangeVal < 1) rangeVal = 1;
+    const avatarVal = document.getElementById('avatarSelect').value;
+    let imgData = pendingImageData || (avatarVal !== 'default' ? avatarVal : '🧙');
+    const newId = Date.now() + Math.random();
+    let savedImgRef = null;
+    
+    // Si hay una imagen real (no emoji) y tenemos carpeta personajes, guardarla como archivo
+    if (pendingImageData && pendingImageData.startsWith("data:image") && personajesHandle) {
+        const fileName = `avatar_${newId}.png`;
+        try {
+            const blob = await (await fetch(pendingImageData)).blob();
+            const fileHandle = await personajesHandle.getFileHandle(fileName, { create: true });
+            const writable = await fileHandle.createWritable();
+            await writable.write(blob);
+            await writable.close();
+            savedImgRef = `file:${fileName}`;
+            imgData = savedImgRef;
+        } catch(e) {
+            console.error("No se pudo guardar la imagen:", e);
+        }
+    }
+    
+    characters.push({
+        id: newId, name, imgData, movementMax: moveVal, movementLeft: moveVal, moveRange: rangeVal, r: -1, c: -1
+    });
+    selectedCharId = newId;
+    pendingImageData = null;
+    document.getElementById('newCharName').value = '';
+    document.getElementById('charImageUpload').value = '';
+    document.getElementById('imgPreview').textContent = '(ninguna)';
+    addLogEntry(`✨ Personaje creado: ${name}`);
+    updateStatusMessage(`✨ ${name} creado`);
+    fullRender();
+});
+
+document.getElementById('placeCharBtn').addEventListener('click', () => {
+    if (!selectedCharId) return updateStatusMessage('Selecciona un personaje', true);
+    placementMode = true;
+    updateStatusMessage('📍 Click en mapa para colocar');
+    document.getElementById('toolCharacters').checked = true;
+    updateModeBar();
+});
+
+document.getElementById('deleteCharBtn').addEventListener('click', () => {
+    if (!selectedCharId) return;
+    const ch = getCharacterById(selectedCharId);
+    characters = characters.filter(c => c.id !== selectedCharId);
+    selectedCharId = null;
+    addLogEntry(`🗑️ Personaje eliminado: ${ch?.name}`);
+    fullRender();
+});
+
+document.getElementById('resetIndividualMoveBtn').addEventListener('click', () => {
+    if (!selectedCharId) return updateStatusMessage('Selecciona personaje', true);
+    const ch = getCharacterById(selectedCharId);
+    if (ch) {
+        ch.movementLeft = ch.movementMax;
+        fullRender();
+        updateStatusMessage(`♻️ PM de ${ch.name} restaurados`);
+        addLogEntry(`♻️ ${ch.name} recuperó PM (${ch.movementMax})`);
+    }
+});
+
+function placeCharacterAt(charId, newR, newC) {
+    const char = getCharacterById(charId);
+    if (!char) return false;
+    if (newR < 0 || newR >= rows || newC < 0 || newC >= cols) {
+        updateStatusMessage('Posición fuera del mapa', true); return false;
+    }
+    const stacked = characters.filter(ch => ch.r === newR && ch.c === newC && ch.id !== charId);
+    char.r = newR; char.c = newC;
+    char.movementLeft = char.movementMax;
+    const msg = stacked.length > 0 ? `${char.name} colocado (apilado con ${stacked.map(c=>c.name).join(', ')})` : `${char.name} colocado en (${newR},${newC})`;
+    updateStatusMessage(msg);
+    addLogEntry(`📍 ${msg}`);
+    fullRender();
+    return true;
+}
+
+function teleportCharacterTo(charId, destR, destC) {
+    const char = getCharacterById(charId);
+    if (!char) return;
+    if (destR < 0 || destR >= rows || destC < 0 || destC >= cols) return;
+    const oldPos = char.r === -1 ? 'sin colocar' : `(${char.r},${char.c})`;
+    char.r = destR; char.c = destC;
+    updateStatusMessage(`${char.name} → (${destR},${destC})`);
+    addLogEntry(`🌀 ${char.name} teleportado de ${oldPos} a (${destR},${destC})`);
+    fullRender();
+}
+
+// ── MOVIMIENTO: cada acción cuesta 1 mov; diagonal = mismo coste (Chebyshev)
+function moveCharacterWithCost(charId, destR, destC) {
+    const char = getCharacterById(charId);
+    if (!char || char.r === -1) { updateStatusMessage('Personaje no colocado', true); return false; }
+    const dist = Math.max(Math.abs(char.r - destR), Math.abs(char.c - destC)); // Chebyshev
+    if (dist === 0) return false;
+    const range = char.moveRange || 1;
+    if (dist > range) {
+        updateStatusMessage(`Fuera de rango (máx ${range} casilla${range>1?'s':''} por mov)`, true);
+        return false;
+    }
+    if (char.movementLeft <= 0) {
+        updateStatusMessage(`Sin movimientos (0/${char.movementMax})`, true);
+        return false;
+    }
+    char.r = destR; char.c = destC;
+    char.movementLeft -= 1;  // Cada movimiento siempre cuesta 1
+    updateStatusMessage(`${char.name} → (${destR},${destC}) · ${char.movementLeft}/${char.movementMax} movs`);
+    addLogEntry(`🚶 ${char.name} → (${destR},${destC}) — 1 mov (${char.movementLeft} restantes)`);
+    fullRender();
+    return true;
+}
+
+// ============================================================
+// MOVE OVERLAYS (con distancia Chebyshev)
+// ============================================================
+function clearMoveOverlays() {
+    currentMoveOverlays.forEach(o => o.remove());
+    currentMoveOverlays = [];
+}
+
+function highlightMovableCells() {
+    clearMoveOverlays();
+    if (!selectedCharId) return;
+    const char = getCharacterById(selectedCharId);
+    if (!char || char.r === -1 || char.movementLeft <= 0) return;
+    const range   = char.moveRange || 1;     // Casillas alcanzables en un solo movimiento
+    const wrapper = document.getElementById('mapWrapper');
+    const wrapRect = wrapper.getBoundingClientRect();
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            const dist = Math.max(Math.abs(char.r - r), Math.abs(char.c - c)); // Chebyshev
+            if (dist <= 0 || dist > range) continue;
+            const cellDiv = document.getElementById(`c_${r}_${c}`);
+            if (!cellDiv) continue;
+            const rect    = cellDiv.getBoundingClientRect();
+            const overlay = document.createElement('div');
+            overlay.className = 'move-overlay';
+            overlay.textContent = dist === 1 ? '·' : dist;
+            overlay.style.width  = `${currentCellSize}px`;
+            overlay.style.height = `${currentCellSize}px`;
+            overlay.style.position = 'absolute';
+            overlay.style.left = `${rect.left - wrapRect.left + wrapper.scrollLeft}px`;
+            overlay.style.top  = `${rect.top  - wrapRect.top  + wrapper.scrollTop}px`;
+            overlay.addEventListener('click', () => moveCharacterWithCost(selectedCharId, r, c));
+            wrapper.style.position = 'relative';
+            wrapper.appendChild(overlay);
+            currentMoveOverlays.push(overlay);
+        }
+    }
+}
+
+// ============================================================
+// DIRECTION BUTTONS (coste 1 para todas las direcciones)
+// ============================================================
+function updateIndividualMovePanel() {
+    const container = document.getElementById('moveButtonsContainer');
+    const nameSpan  = document.getElementById('selectedCharNameMove');
+    if (!selectedCharId) {
+        nameSpan.textContent = 'Sin selección';
+        container.innerHTML  = '<div style="color:var(--text-muted);font-size:0.75rem;grid-column:1/-1;text-align:center;">Selecciona un personaje</div>';
+        return;
+    }
+    const char = getCharacterById(selectedCharId);
+    if (!char) return;
+    const range = char.moveRange || 1;
+    nameSpan.textContent = `${char.name}  ·  ${char.movementLeft}/${char.movementMax} movs  ·  ↗${range}`;
+
+    const dirs = [
+        [-1,-1,'↖'], [-1,0,'↑'], [-1,1,'↗'],
+        [0,-1,'←'],  null,       [0,1,'→'],
+        [1,-1,'↙'],  [1,0,'↓'],  [1,1,'↘']
+    ];
+    container.innerHTML = '';
+    for (const d of dirs) {
+        const btn = document.createElement('div');
+        if (!d) {
+            btn.className = 'move-btn move-center';
+            btn.textContent = char.r === -1 ? '?' : `${char.r},${char.c}`;
+            container.appendChild(btn);
+            continue;
+        }
+        const [dr, dc, icon] = d;
+        const nr = char.r + dr, nc = char.c + dc;
+        // Cada botón mueve 1 casilla (siempre dentro del rango mínimo 1)
+        const enabled = char.r !== -1 && nr >= 0 && nr < rows && nc >= 0 && nc < cols && char.movementLeft > 0;
+        btn.className = `move-btn${enabled ? '' : ' disabled'}`;
+        btn.innerHTML = `${icon}<br><span style="font-size:0.6rem;opacity:0.7;">-1</span>`;
+        if (enabled) btn.addEventListener('click', () => moveCharacterWithCost(selectedCharId, nr, nc));
+        container.appendChild(btn);
+    }
+}
+
+// ============================================================
+// CELL INTERACTION (DESTROY/REPAIR/CROP)
+// ============================================================
+document.addEventListener('mousedown', () => isMouseDown = true);
+document.addEventListener('mouseup',   () => {
+    isMouseDown = false;
+    if (getSelectedTool() === 'crop' && cropStart && cropEnd) applyCrop();
+    cropStart = null; cropEnd = null;
+});
+
+function handleCellInteraction(r, c, eventType) {
+    const tool = getSelectedTool();
+
+    if (tool === 'characters') {
+        if (eventType !== 'mousedown') return;
+        if (placementMode && selectedCharId) {
+            placeCharacterAt(selectedCharId, r, c);
+            placementMode = false;
+            updateStatusMessage('Colocación finalizada');
+            return;
+        }
+        const charsHere = characters.filter(ch => ch.r === r && ch.c === c);
+        if (charsHere.length > 0) {
+            const curIdx = charsHere.findIndex(ch => ch.id === selectedCharId);
+            if (curIdx === -1) {
+                selectedCharId = charsHere[charsHere.length - 1].id;
+                updateStatusMessage(`${getCharacterById(selectedCharId).name} seleccionado`);
+            } else if (charsHere.length === 1) {
+                selectedCharId = null;
+                updateStatusMessage('Deseleccionado');
+            } else {
+                selectedCharId = charsHere[(curIdx + 1) % charsHere.length].id;
+                updateStatusMessage(`${getCharacterById(selectedCharId).name} seleccionado`);
+            }
+            fullRender();
+        } else if (selectedCharId) {
+            teleportCharacterTo(selectedCharId, r, c);
+        }
+        return;
+    }
+
+    if (placementMode && eventType === 'mousedown') {
+        if (selectedCharId) placeCharacterAt(selectedCharId, r, c);
+        placementMode = false;
+        updateStatusMessage('Colocación finalizada');
+        return;
+    }
+
+    if ((tool === 'destroy' || tool === 'repair') &&
+        (eventType === 'mousedown' || (eventType === 'mouseenter' && isMouseDown))) {
+        const brush = parseInt(document.getElementById('brushSize').value) - 1;
+        if (eventType === 'mousedown') history.push(grid.map(row => row.map(cell => ({...cell}))));
+
+        for (let dr = -brush; dr <= brush; dr++) {
+            for (let dc = -brush; dc <= brush; dc++) {
+                const nr = r + dr, nc = c + dc;
+                if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
+                const cell    = grid[nr][nc];
+                const wasDestroyed = cell.destroyed;
+                if (!cell.originalName) {
+                    const bName = cell.building?.name || '';
+                    cell.originalName = bName ? `${cell.type.name} (${bName})` : cell.type.name;
+                }
+                if (tool === 'destroy') {
+                    cell.destroyed = true;
+                    if (!wasDestroyed) addLogEntry(`💥 Destrucción en (${nr},${nc}) — ${cell.originalName}`);
+                } else {
+                    cell.destroyed = false;
+                    if (wasDestroyed) addLogEntry(`🛠️ Reparación en (${nr},${nc}) — ${cell.originalName}`);
+                }
+                updateSingleCellDOM(nr, nc);
+            }
+        }
+        if (selectedCharId) highlightMovableCells();
+        return;
+    }
+
+    if (tool === 'crop') {
+        if (eventType === 'mousedown')                              { cropStart = {r,c}; cropEnd = {r,c}; drawCropHighlight(); }
+        else if (eventType === 'mouseenter' && isMouseDown && cropStart) { cropEnd = {r,c}; drawCropHighlight(); }
+    }
+}
+
+function drawCropHighlight() {
+    document.querySelectorAll('.cell.crop-highlight').forEach(el => el.classList.remove('crop-highlight'));
+    if (!cropStart || !cropEnd) return;
+    const r1 = Math.min(cropStart.r, cropEnd.r), r2 = Math.max(cropStart.r, cropEnd.r);
+    const c1 = Math.min(cropStart.c, cropEnd.c), c2 = Math.max(cropStart.c, cropEnd.c);
+    for (let r = r1; r <= r2; r++) for (let c = c1; c <= c2; c++) {
+        const el = document.getElementById(`c_${r}_${c}`);
+        if (el) el.classList.add('crop-highlight');
+    }
+}
+
+function applyCrop() {
+    if (!cropStart || !cropEnd) return;
+    const r1 = Math.min(cropStart.r, cropEnd.r), r2 = Math.max(cropStart.r, cropEnd.r);
+    const c1 = Math.min(cropStart.c, cropEnd.c), c2 = Math.max(cropStart.c, cropEnd.c);
+    if (r2 - r1 < 1 || c2 - c1 < 1) return;
+    history.push(grid.map(row => row.map(cell => ({...cell}))));
+    grid = grid.slice(r1, r2 + 1).map(row => row.slice(c1, c2 + 1));
+    rows = grid.length; cols = grid[0].length;
+    characters.forEach(ch => {
+        if (ch.r === -1) return;
+        if (ch.r < r1 || ch.r > r2 || ch.c < c1 || ch.c > c2) { ch.r = -1; ch.c = -1; }
+        else { ch.r -= r1; ch.c -= c1; }
+    });
+    addLogEntry(`✂️ Recorte aplicado → ${rows}×${cols}`);
+    fullRender();
+}
+
+document.getElementById('undoBtn').addEventListener('click', () => {
+    if (!history.length) return updateStatusMessage('Sin más acciones', true);
+    grid = history.pop();
+    rows = grid.length; cols = grid[0]?.length || 0;
+    addLogEntry('↩️ Deshecho');
+    fullRender();
+});
+
+document.getElementById('clearLogBtn').addEventListener('click', () => {
+    destructionLog = [];
+    document.getElementById('logContent').innerHTML = '<div class="log-entry system">🗄️ Log limpiado.</div>';
+});
+
+// ============================================================
+// RENDERING (con ocultación de personajes no seleccionados)
+// ============================================================
+function buildCellContent(div, r, c) {
+    const cell      = grid[r][c];
+    const charsHere = characters.filter(ch => ch.r === r && ch.c === c);
+    // Mostrar personaje: si showAllChars, mostrar todos (preferir seleccionado); si no, solo el seleccionado
+    let visibleChar;
+    if (showAllChars) {
+        visibleChar = charsHere.find(ch => ch.id === selectedCharId) ||
+                      (charsHere.length > 0 ? charsHere[charsHere.length - 1] : null);
+    } else {
+        visibleChar = (selectedCharId !== null) ? charsHere.find(ch => ch.id === selectedCharId) : null;
+    }
+    const hasVisibleChar = !!visibleChar;
+    const hasSelected = charsHere.some(ch => ch.id === selectedCharId);
+
+    let bg = cell.type.bg;
+    if (cell.building && !cell.isEntrance && !cell.destroyed) bg = cell.building.bg;
+    if (cell.destroyed) bg = '#1a1a1a';
+    div.style.backgroundColor = bg;
+
+    div.className = 'cell';
+    if (cell.destroyed) div.classList.add('destroyed-cell');
+    if (hasVisibleChar) div.classList.add('has-character');
+    if (hasSelected)    div.classList.add('char-selected-cell');
+
+    div.innerHTML = '';
+
+    const terrainEl = document.createElement('span');
+    terrainEl.className = 'cell-terrain';
+    if (cell.destroyed) {
+        terrainEl.textContent = '';
+    } else if (cell.isEntrance) {
+        terrainEl.textContent = '🚪';
+    } else if (cell.building && cell.isMainIcon) {
+        terrainEl.textContent = cell.building.emoji;
+    } else if (cell.building && !cell.isMainIcon) {
+        terrainEl.textContent = '';
+    } else {
+        terrainEl.textContent = cell.type.emoji;
+    }
+    div.appendChild(terrainEl);
+
+    if (hasVisibleChar) {
+        const charEl = document.createElement('span');
+        charEl.className = 'cell-char-layer';
+        const isEmoji = typeof visibleChar.imgData === 'string' && visibleChar.imgData.length <= 5 && !visibleChar.imgData.startsWith('data:');
+        if (isEmoji) {
+            charEl.textContent = visibleChar.imgData;
+        } else {
+            const img = document.createElement('img');
+            img.src = visibleChar.imgData;
+            charEl.appendChild(img);
+        }
+        const allNames = charsHere.map(ch => `${ch.name} PM:${ch.movementLeft}`).join(' · ');
+        charEl.title = `${allNames} | ${cell.info || cell.type.name}`;
+        div.appendChild(charEl);
+
+        // Badge de apilamiento: mostrar si hay más de un personaje en la celda
+        if (charsHere.length > 1) {
+            const sb = document.createElement('div');
+            sb.className  = 'stack-badge';
+            sb.textContent = `×${charsHere.length}`;
+            div.appendChild(sb);
+        }
+
+        const badge = document.createElement('div');
+        badge.className  = 'movement-badge';
+        badge.textContent = visibleChar.movementLeft;
+        div.appendChild(badge);
+    }
+
+    div.title = hasVisibleChar
+        ? `${charsHere.map(c=>c.name).join('+')} | ${cell.info || cell.type.name}`
+        : (cell.info || cell.type.name || '');
+}
+
+function updateSingleCellDOM(r, c) {
+    const div = document.getElementById(`c_${r}_${c}`);
+    if (!div) return;
+    buildCellContent(div, r, c);
+}
+
+function renderGrid() {
+    const container   = document.getElementById('cityGrid');
+    const placeholder = document.getElementById('placeholder');
+    if (!grid || rows === 0) {
+        container.style.display = 'none';
+        placeholder.style.display = 'block';
+        return;
+    }
+    container.style.display = 'grid';
+    placeholder.style.display = 'none';
+    updateZoomCSS();
+    updateModeBar();
+    container.style.gridTemplateColumns = `repeat(${cols}, var(--cellSize))`;
+    container.style.gridTemplateRows    = `repeat(${rows}, var(--cellSize))`;
+    container.innerHTML = '';
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            const div = document.createElement('div');
+            div.id = `c_${r}_${c}`;
+            buildCellContent(div, r, c);
+            div.addEventListener('mousedown', () => handleCellInteraction(r, c, 'mousedown'));
+            div.addEventListener('mouseenter', () => handleCellInteraction(r, c, 'mouseenter'));
+            container.appendChild(div);
+        }
+    }
+    if (selectedCharId) highlightMovableCells();
+}
+
+function renderCharacterList() {
+    const container = document.getElementById('charListContainer');
+    if (!characters.length) {
+        container.innerHTML = '<div style="color:var(--text-muted);font-size:0.82rem;padding:4px 0;">Sin personajes. Crea uno abajo.</div>';
+        return;
+    }
+    container.innerHTML = '';
+    characters.forEach(ch => {
+        const card = document.createElement('div');
+        card.className = `char-card${selectedCharId === ch.id ? ' selected' : ''}`;
+
+        const isEmoji = typeof ch.imgData === 'string' && ch.imgData.length <= 5 && !ch.imgData.startsWith('data:');
+        const pmPct   = Math.round((ch.movementLeft / ch.movementMax) * 100);
+        const pos     = ch.r === -1 ? 'Sin colocar' : `(${ch.r}, ${ch.c})`;
+        const range   = ch.moveRange || 1;
+
+        card.innerHTML = `
+            <div class="char-avatar">
+                ${isEmoji ? `<span style="font-size:1.6rem">${ch.imgData}</span>` : `<img src="${ch.imgData}">`}
+            </div>
+            <div class="char-meta">
+                <div class="char-name">${ch.name}</div>
+                <div class="char-stats">🎲 ${ch.movementLeft}/${ch.movementMax} movs · ↗${range} · 📍 ${pos}</div>
+                <div class="pm-bar-wrap"><div class="pm-bar" style="width:${pmPct}%"></div></div>
+            </div>
+            <div class="char-btns">
+                <button class="btn btn-default btn-small reset-pm" data-id="${ch.id}" title="Restaurar PM">♻️</button>
+                <button class="btn btn-danger btn-small del-char" data-id="${ch.id}" title="Eliminar">🗑️</button>
+            </div>
+        `;
+
+        card.addEventListener('click', e => {
+            if (e.target.closest('.char-btns')) return;
+            selectedCharId = (selectedCharId === ch.id) ? null : ch.id;
+            placementMode  = false;
+            fullRender();
+            updateStatusMessage(selectedCharId ? `${ch.name} seleccionado` : 'Deseleccionado');
+        });
+
+        container.appendChild(card);
+    });
+
+    container.querySelectorAll('.reset-pm').forEach(btn => btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const ch = getCharacterById(Number(btn.dataset.id));
+        if (ch) { ch.movementLeft = ch.movementMax; fullRender(); updateStatusMessage(`♻️ PM de ${ch.name} restaurados`); }
+    }));
+    container.querySelectorAll('.del-char').forEach(btn => btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const id = Number(btn.dataset.id);
+        const ch = getCharacterById(id);
+        characters = characters.filter(c => c.id !== id);
+        if (selectedCharId === id) selectedCharId = null;
+        addLogEntry(`🗑️ Eliminado: ${ch?.name}`);
+        fullRender();
+    }));
+}
+
+async function captureMapImage() {
+    if (!grid || rows === 0) {
+        updateStatusMessage("No hay mapa para capturar", true);
+        return;
+    }
+    updateStatusMessage("📸 Generando captura…");
+
+    const canvas = document.createElement('canvas');
+    const cellW  = currentCellSize;
+    const cellH  = currentCellSize;
+    canvas.width  = cols * cellW;
+    canvas.height = rows * cellH;
+    const ctx = canvas.getContext('2d');
+
+    const baseFontSize = Math.floor(cellH * 0.55);
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'middle';
+
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            const cell = grid[r][c];
+            const x    = c * cellW;
+            const y    = r * cellH;
+
+            // Fondo
+            let bgColor = cell.type.bg;
+            if (cell.building && !cell.isEntrance && !cell.destroyed) bgColor = cell.building.bg;
+            if (cell.destroyed) bgColor = '#1a1a1a';
+            ctx.fillStyle = bgColor;
+            ctx.fillRect(x, y, cellW, cellH);
+
+            if (cell.destroyed) {
+                ctx.fillStyle = '#ff8fa0';
+                ctx.font = `${Math.floor(cellH * 0.5)}px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji"`;
+                ctx.fillText('✕', x + cellW / 2, y + cellH / 2);
+                continue;
+            }
+
+            // Terreno / edificio / entrada
+            let terrainChar = '';
+            if      (cell.isEntrance)                       terrainChar = '🚪';
+            else if (cell.building && cell.isMainIcon)      terrainChar = cell.building.emoji;
+            else if (cell.building && !cell.isMainIcon)     terrainChar = '';
+            else                                             terrainChar = cell.type.emoji;
+
+            if (terrainChar) {
+                ctx.font      = `${baseFontSize}px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji","Rajdhani",sans-serif`;
+                ctx.fillStyle = '#000000';
+                ctx.fillText(terrainChar, x + cellW / 2, y + cellH / 2);
+            }
+
+            // Captura TODOS los personajes colocados (no solo el seleccionado)
+            const charsHere = characters.filter(ch => ch.r === r && ch.c === c);
+            if (charsHere.length === 0) continue;
+            // Mostrar el seleccionado primero; si no hay seleccionado, el último
+            const capChar = charsHere.find(ch => ch.id === selectedCharId) || charsHere[charsHere.length - 1];
+            const isEmoji = typeof capChar.imgData === 'string' && capChar.imgData.length <= 5 && !capChar.imgData.startsWith('data:');
+
+            if (isEmoji) {
+                ctx.font = `${Math.floor(cellH * 0.65)}px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji"`;
+                ctx.fillText(capChar.imgData, x + cellW / 2, y + cellH / 2);
+            } else {
+                const img = new Image();
+                await new Promise(resolve => {
+                    img.onload = () => {
+                        const aspect = img.width / img.height;
+                        let drawW = cellW * 0.82, drawH = cellH * 0.82;
+                        if (aspect > 1) drawH = drawW / aspect; else drawW = drawH * aspect;
+                        ctx.drawImage(img, x + (cellW - drawW) / 2, y + (cellH - drawH) / 2, drawW, drawH);
+                        resolve();
+                    };
+                    img.onerror = resolve;
+                    img.src = capChar.imgData;
+                });
+            }
+
+            // Badge de movimientos restantes
+            ctx.font      = `bold ${Math.floor(cellH * 0.25)}px "Orbitron",monospace`;
+            ctx.fillStyle = capChar.id === selectedCharId ? '#ffd966' : '#a0c8ff';
+            ctx.fillText(capChar.movementLeft, x + cellW - 5, y + cellH - 4);
+
+            // Badge de apilamiento
+            if (charsHere.length > 1) {
+                ctx.font      = `bold ${Math.floor(cellH * 0.22)}px "Orbitron",monospace`;
+                ctx.fillStyle = '#c4b0ff';
+                ctx.fillText(`×${charsHere.length}`, x + 6, y + 5);
+            }
+        }
+    }
+
+    // Guardar en subcarpeta capturas si existe, sino descargar directamente
+    const filename = `mapa_${modeName}_${Date.now()}.png`;
+    if (capturasHandle) {
+        try {
+            canvas.toBlob(async blob => {
+                const fh = await capturasHandle.getFileHandle(filename, { create: true });
+                const writable = await fh.createWritable();
+                await writable.write(blob);
+                await writable.close();
+                addLogEntry(`📸 Captura guardada en carpeta: ${filename}`);
+                updateStatusMessage(`📸 Guardado en capturas/${filename}`);
+            }, 'image/png');
+        } catch (err) {
+            console.error(err);
+            fallbackDownload(canvas, filename);
+        }
+    } else {
+        fallbackDownload(canvas, filename);
+    }
+}
+
+function fallbackDownload(canvas, filename) {
+    const link = document.createElement('a');
+    link.download = filename;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+    addLogEntry(`📸 Captura de pantalla guardada: ${filename}`);
+    updateStatusMessage('📸 Captura descargada');
+}
+
+// Agregar evento al botón de tomar foto
+document.getElementById('screenshotBtn').addEventListener('click', captureMapImage);
+
+// ============================================================
+// TOGGLE VISIBILIDAD DE PERSONAJES EN MAPA
+// ============================================================
+document.getElementById('toggleCharsBtn').addEventListener('click', () => {
+    showAllChars = !showAllChars;
+    const btn = document.getElementById('toggleCharsBtn');
+    if (showAllChars) {
+        btn.textContent = '👁 Personajes: Todos';
+        btn.classList.remove('btn-default');
+        btn.classList.add('btn-teal');
+        updateStatusMessage('Mostrando todos los personajes en el mapa');
+    } else {
+        btn.textContent = '🫥 Solo seleccionado';
+        btn.classList.remove('btn-teal');
+        btn.classList.add('btn-default');
+        updateStatusMessage('Solo el personaje seleccionado es visible');
+    }
+    fullRender();
+});
+
+// ============================================================
+// INIT
+// ============================================================
+updateModeBar();
+addLogEntry('🔌 Editor iniciado · Importa un mapa para comenzar');
+</script>
+</body>
+</html>
