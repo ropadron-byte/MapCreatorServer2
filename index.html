@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ciudad Procedural · Generador</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-deep:    #080b12;
+            --bg-main:    #0d1117;
+            --bg-surface: #131922;
+            --bg-card:    #181f2e;
+            --border:     #1e2840;
+            --border-lit: #2a3654;
+            --gold:       #ffd966;
+            --gold-dim:   #c9a93a;
+            --red:        #ff4757;
+            --green:      #2ed573;
+            --blue:       #3a86ff;
+            --text:       #d8e0f0;
+            --text-muted: #5a6380;
+            --text-dim:   #8090b0;
+        }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background: var(--bg-deep);
+            font-family: 'Rajdhani', sans-serif;
+            min-height: 100vh;
+            color: var(--text);
+            overflow-x: hidden;
+        }
+
+        /* Scanline overlay */
+        body::before {
+            content: '';
+            position: fixed; inset: 0; pointer-events: none; z-index: 999;
+            background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.04) 2px, rgba(0,0,0,0.04) 4px);
+        }
+
+        /* Grid texture background */
+        body::after {
+            content: '';
+            position: fixed; inset: 0; pointer-events: none; z-index: 0;
+            background-image:
+                linear-gradient(rgba(255,217,102,0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,217,102,0.02) 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+
+        .page-wrap {
+            position: relative; z-index: 1;
+            padding: 28px 24px 40px;
+            max-width: 1500px;
+            margin: 0 auto;
+        }
+
+        /* ── HEADER ── */
+        .header {
+            text-align: center;
+            margin-bottom: 28px;
+        }
+        .header-eyebrow {
+            font-family: 'Orbitron', monospace;
+            font-size: 0.6rem;
+            letter-spacing: 6px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+        h1 {
+            font-family: 'Orbitron', monospace;
+            font-size: clamp(1.4rem, 3vw, 2.4rem);
+            font-weight: 900;
+            color: var(--gold);
+            letter-spacing: 2px;
+            text-shadow:
+                0 0 20px rgba(255,217,102,0.45),
+                0 0 60px rgba(255,217,102,0.15),
+                0 2px 0 rgba(0,0,0,0.8);
+            line-height: 1.1;
+        }
+        .header-sub {
+            margin-top: 8px;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+        .header-line {
+            display: block;
+            width: 80px;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--gold), transparent);
+            margin: 12px auto 0;
+        }
+
+        /* ── MAIN CONTAINER ── */
+        .container {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 0 0 1px var(--border-lit), 0 30px 60px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.04);
+        }
+
+        /* ── CONTROLS TOOLBAR ── */
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 18px;
+            align-items: center;
+            flex-wrap: wrap;
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 12px 18px;
+            border: 1px solid var(--border);
+        }
+        .ctrl-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .ctrl-label {
+            font-family: 'Orbitron', monospace;
+            font-size: 0.55rem;
+            letter-spacing: 2px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+        .sep {
+            width: 1px;
+            height: 28px;
+            background: var(--border-lit);
+            flex-shrink: 0;
+        }
+        select {
+            background: var(--bg-main);
+            color: var(--text);
+            border: 1px solid var(--border-lit);
+            padding: 7px 12px;
+            border-radius: 8px;
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            -webkit-appearance: none;
+        }
+        select:hover, select:focus {
+            border-color: var(--gold-dim);
+            box-shadow: 0 0 0 1px rgba(255,217,102,0.15);
+        }
+        .btn {
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 700;
+            font-size: 0.88rem;
+            border: none;
+            padding: 8px 18px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.12s, box-shadow 0.2s, filter 0.2s;
+            white-space: nowrap;
+            letter-spacing: 0.5px;
+        }
+        .btn:active { transform: scale(0.96); }
+        .btn-gold {
+            background: linear-gradient(135deg, #ffd966 0%, #e8a800 100%);
+            color: #0d1117;
+            box-shadow: 0 4px 15px rgba(255,217,102,0.25);
+        }
+        .btn-gold:hover {
+            box-shadow: 0 4px 25px rgba(255,217,102,0.45);
+            filter: brightness(1.08);
+        }
+        .btn-blue {
+            background: rgba(58, 134, 255, 0.18);
+            color: #7baeff;
+            border: 1px solid rgba(58, 134, 255, 0.3);
+        }
+        .btn-blue:hover { background: rgba(58, 134, 255, 0.35); }
+        .btn-red {
+            background: linear-gradient(135deg, #e94560 0%, #b5001f 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(233,69,96,0.35);
+        }
+        .btn-red:hover {
+            box-shadow: 0 4px 25px rgba(233,69,96,0.55);
+            filter: brightness(1.1);
+        }
+
+        /* ── MAP WRAPPER ── */
+        .map-wrapper {
+            background: #060810;
+            padding: 10px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            box-shadow: inset 0 0 30px rgba(0,0,0,0.9);
+            overflow: auto;
+            max-height: 72vh;
+            position: relative;
+        }
+        .map-wrapper::-webkit-scrollbar { width: 6px; height: 6px; }
+        .map-wrapper::-webkit-scrollbar-track { background: var(--bg-main); }
+        .map-wrapper::-webkit-scrollbar-thumb { background: var(--border-lit); border-radius: 3px; }
+
+        .grid { display: grid; gap: 0; }
+        .cell {
+            display: flex; align-items: center; justify-content: center;
+            font-size: 18px; cursor: default;
+            transition: filter 0.08s;
+        }
+        .cell:hover { filter: brightness(1.35); }
+
+        /* ── LEGEND ── */
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 6px;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border);
+        }
+        .legend-item {
+            display: flex; align-items: center; gap: 5px;
+            font-size: 0.78rem; font-weight: 600;
+            color: var(--text-dim);
+            background: var(--bg-card);
+            padding: 4px 10px 4px 6px;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            transition: border-color 0.15s;
+        }
+        .legend-item:hover { border-color: var(--border-lit); }
+        .legend-color {
+            width: 20px; height: 20px;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 4px; font-size: 13px;
+        }
+
+        /* Corner decorations */
+        .container::before, .container::after {
+            content: '';
+            position: absolute;
+            width: 12px; height: 12px;
+            border-color: var(--gold-dim);
+            border-style: solid;
+            opacity: 0.6;
+        }
+        .container { position: relative; }
+        .container::before { top: -1px; left: -1px; border-width: 2px 0 0 2px; border-radius: 2px 0 0 0; }
+        .container::after  { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; border-radius: 0 0 2px 0; }
+    </style>
+</head>
+<body>
+<div class="page-wrap">
+    <div class="header">
+        <div class="header-eyebrow">Sistema de Generación Procedural</div>
+        <h1>🏙️ CIUDAD · GENERADOR</h1>
+        <div class="header-sub">Zonificación · Calles Orgánicas · Nombres Generados</div>
+        <span class="header-line"></span>
+    </div>
+
+    <div class="container">
+        <div class="controls">
+            <div class="ctrl-group">
+                <span class="ctrl-label">Modo</span>
+                <select id="modeSelect"></select>
+            </div>
+
+            <div class="sep"></div>
+
+            <!-- SISTEMA DE CARPETA LOCAL -->
+            <div class="ctrl-group">
+                <button id="selectFolderBtn" class="btn btn-blue">📁 Seleccionar Carpeta</button>
+                <select id="citySelect" style="width:180px;">
+                    <option value="">-- Sin carpeta --</option>
+                </select>
+                <button id="loadSelectedBtn" class="btn btn-teal">Cargar</button>
+                <span id="folderStatus" style="font-size:0.7rem; color:var(--text-muted); margin-left:5px;"></span>
+            </div>
+
+            <div class="sep"></div>
+
+            <div class="ctrl-group">
+                <span class="ctrl-label">Tamaño</span>
+                <select id="sizeSelect">
+                    <option value="36">Pequeña 36×36</option>
+                    <option value="56" selected>Normal 56×56</option>
+                    <option value="80">Grande 80×80</option>
+                    <option value="112">Enorme 112×112</option>
+                </select>
+            </div>
+
+            <div class="sep"></div>
+
+            <button id="regenerateBtn" class="btn btn-gold">🔄 GENERAR</button>
+            <button id="exportBtn" class="btn btn-blue">💾 Exportar</button>
+            <button id="importBtn" class="btn btn-blue">📂 Importar</button>
+            <input type="file" id="importFile" accept=".json" style="display:none">
+
+            <div class="sep"></div>
+            <button onclick="window.location.href='editor.html'" class="btn btn-red">💥 MODO DIOS</button>
+        </div>
+
+        <div class="map-wrapper">
+            <div class="grid" id="cityGrid"></div>
+        </div>
+        <div class="legend" id="legend"></div>
+    </div>
+</div>
+<script src="script.js"></script>
+</body>
+</html>
